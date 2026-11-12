@@ -77,8 +77,4 @@ whoami
 2. Use strong, unique SSH credentials and prefer key-based authentication.
 3. Remove unrestricted root execution of `/bin/tar` from `sudoers`; apply least privilege.
 
-## Evidence and supporting documents
 
-The lab was documented with terminal screenshots covering Nmap, anonymous FTP access, leaked files, Hydra, SSH user access and `sudo tar` privilege escalation. A technical report (DOCX) and walkthrough presentation (PDF) were prepared separately and can be added to this repository.
-
-> **Note:** The original report and presentation contain service-version examples that differ from this session's Nmap results. This README uses the versions observed directly in the lab.
