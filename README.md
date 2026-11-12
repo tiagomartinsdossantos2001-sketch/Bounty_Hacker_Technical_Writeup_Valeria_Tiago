@@ -22,6 +22,8 @@ All testing was performed in an **authorized TryHackMe lab environment**.
 - **[Technical Penetration Testing Report (DOCX)](./Bounty_Hacker_Technical_Writeup_Valeria_Tiago.docx)** — Detailed analysis, attack methodology and remediation.
 - **[Step-by-Step Walkthrough (PDF)](./TryHackMe%20Bounty%20Hacker%20Walkthrough.pdf)** — Presentation with terminal screenshots and key findings.
 
+**Additional documentation:** [Security findings](./docs/SECURITY_FINDINGS.md) · [Evidence index](./docs/EVIDENCE_INDEX.md)
+
 ## Tools and Skills
 
 | Tool | Purpose |
